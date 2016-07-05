@@ -1,0 +1,11 @@
+*.o*
+*.d*
+*.a*
+*~*
+*.lss
+*.hex
+*.elf
+*.ko*
+*.symvers*
+*.order*
+*.mod*
