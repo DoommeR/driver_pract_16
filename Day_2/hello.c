@@ -55,27 +55,36 @@ static ssize_t fl_read(struct file *file, char __user * buf, size_t count, loff_
 
 static ssize_t fl_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
 {
-	int remaining_bytes;
-	int tail_bytes=0;
+	
 	/* Number of bytes not written yet in the device */
-	remaining_bytes = acme_bufsize - (*ppos);
+	int head=0;
+	int tail=acme_bufsize-1;
+	int curr=0;
 
+	
 
-	if (count > remaining_bytes)  {
-		/* Can't write beyond the end of the device */
-		 tail_bytes=count- remaining_bytes+1;
-
+	if (count > tail) {
+		 copy_from_user(&acme_buf[curr] /*to*/ , buf /*from*/ , tail);
+		 printk(KERN_ALERT "buff_full!\n");
+		 //&acme_buf[acme_bufsize]="\n"; 
+		 curr=0;
+		 return tail;
 		//return -EIO;
-	} else tail_bytes=0;
+	} 
 
-	if (copy_from_user(acme_buf + *ppos /*to*/ , buf /*from*/ , count- tail_bytes)) {
-		return -EFAULT;
-	} else {
-		/* Increase the position in the open file */
-		if (tail_bytes!=0) {printk(KERN_ALERT "TAIL DETECTED!\n"); *ppos=0; return count- tail_bytes;} 
-			else { *ppos += count;
-			return count;}
-	}
+		else{
+			if (copy_from_user(&acme_buf[curr] /*to*/ , buf /*from*/ , count))
+			return -EFAULT;
+		 		else {
+		 			printk(KERN_ALERT"copy....\n");
+					curr+=count;
+					tail-=count;
+					return count;
+				}
+		}	
+	
+	
+
 }
 
 static const struct file_operations acme_fops = {
@@ -124,8 +133,8 @@ static void __exit hello_exit(void) {
 	kfree(acme_buf);
 	cdev_del(&acme_cdev);
 	unregister_chrdev_region(acme_dev, acme_count);
+	printk(KERN_ALERT "Goodbye\n");
 
-printk(KERN_ALERT "Goodbye\n");
 }
 
 module_init(hello_init);
