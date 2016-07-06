@@ -9,17 +9,21 @@
 #include <linux/slab.h>
 
 
-
-
 MODULE_LICENSE("GPL");
 
-static void *acme_buf=NULL;
-static int acme_bufsize = 8192;
 
+static int acme_bufsize = 10;
+static void *acme_buf=NULL;
 static int acme_count = 1;
 static dev_t acme_dev = MKDEV(202, 128);
 
+
 static struct cdev acme_cdev;
+
+
+
+
+
 
 
 static ssize_t fl_read(struct file *file, char __user * buf, size_t count, loff_t * ppos)
@@ -52,18 +56,25 @@ static ssize_t fl_read(struct file *file, char __user * buf, size_t count, loff_
 static ssize_t fl_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
 {
 	int remaining_bytes;
+	int tail_bytes=0;
+	/* Number of bytes not written yet in the device */
 	remaining_bytes = acme_bufsize - (*ppos);
+	if (*ppos>acme_bufsize-2) *ppos=0;
 
-	if (count > remaining_bytes) {
-		return -EIO;
-	}
+	if (count > remaining_bytes)  {
+		/* Can't write beyond the end of the device */
+		 tail_bytes=count- remaining_bytes+1;
 
-	if (copy_from_user(acme_buf + *ppos /*to*/ , buf /*from*/ , count)) {
+		//return -EIO;
+	} else tail_bytes=0;
+
+	if (copy_from_user(acme_buf + *ppos /*to*/ , buf /*from*/ , count- tail_bytes)) {
 		return -EFAULT;
 	} else {
-		
-		*ppos += count;
-		return count;
+		/* Increase the position in the open file */
+		if (tail_bytes!=0) {printk(KERN_ALERT "TAIL DETECTED!\n"); *ppos=0; return count- tail_bytes;} 
+			else { *ppos += count;
+			return count;}
 	}
 }
 
@@ -109,6 +120,7 @@ static int __init hello_init(void) {
 
 
 static void __exit hello_exit(void) {
+	
 	kfree(acme_buf);
 	cdev_del(&acme_cdev);
 	unregister_chrdev_region(acme_dev, acme_count);
