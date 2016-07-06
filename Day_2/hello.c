@@ -59,7 +59,7 @@ static ssize_t fl_write(struct file *file, const char __user *buf, size_t count,
 	int tail_bytes=0;
 	/* Number of bytes not written yet in the device */
 	remaining_bytes = acme_bufsize - (*ppos);
-	if (*ppos>acme_bufsize-2) *ppos=0;
+
 
 	if (count > remaining_bytes)  {
 		/* Can't write beyond the end of the device */
