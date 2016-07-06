@@ -17,73 +17,60 @@ static void *acme_buf=NULL;
 static int acme_count = 1;
 static dev_t acme_dev = MKDEV(202, 128);
 
+static int tail;
+static int curr;
 
 static struct cdev acme_cdev;
 
-
-
-
-
+rwlock_t locker;
 
 
 static ssize_t fl_read(struct file *file, char __user * buf, size_t count, loff_t * ppos)
 {
 	
-/* The acme_buf address corresponds to a device I/O memory area */
-	/* of size acme_bufsize, obtained with ioremap() */
-	int remaining_size, transfer_size;
-
-	remaining_size = acme_bufsize - (int)(*ppos);
-				/* bytes left to transfer */
-	if (remaining_size == 0) {
-				/* All read, returning 0 (End Of File) */
-		return 0;
+	if (curr==tail) {
+		write_lock(&locker);
+		if (copy_to_user(buf, acme_buf, tail))
+			return -EFAULT;
+		write_unlock(&locker);
+		
 	}
+	else
+		if (copy_to_user(buf, acme_buf, curr))
+			return -EFAULT;
 
-	/* Size of this transfer */
-	transfer_size = min_t(int, remaining_size, count);
-
-	if (copy_to_user
-	    (buf /* to */ , acme_buf + *ppos /* from */ , transfer_size)) {
-		return -EFAULT;
-	} else {		/* Increase the position in the open file */
-		*ppos += transfer_size;
-		return transfer_size;
-	}
-	
 }
+
 
 static ssize_t fl_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
 {
 	
-	/* Number of bytes not written yet in the device */
-	int head=0;
-	int tail=acme_bufsize-1;
-	int curr=0;
+	tail=acme_bufsize-1;
+	count=0;
 
-	
-
+	read_lock(&locker);
 	if (count > tail) {
-		 copy_from_user(&acme_buf[curr] /*to*/ , buf /*from*/ , tail);
+		 if (copy_from_user(&acme_buf[curr] ,buf ,tail)) 
+			return -EFAULT;
+
 		 printk(KERN_ALERT "buff_full!\n");
-		 //&acme_buf[acme_bufsize]="\n"; 
-		 curr=0;
+		 read_unlock(&locker);
 		 return tail;
-		//return -EIO;
 	} 
 
 		else{
-			if (copy_from_user(&acme_buf[curr] /*to*/ , buf /*from*/ , count))
+			if (copy_from_user(&acme_buf[curr] ,buf ,count))
 			return -EFAULT;
 		 		else {
 		 			printk(KERN_ALERT"copy....\n");
 					curr+=count;
 					tail-=count;
 					return count;
+
 				}
 		}	
 	
-	
+	read_unlock(&locker);
 
 }
 
