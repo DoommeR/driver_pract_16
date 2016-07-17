@@ -1,4 +1,6 @@
-#include "hx.h"
+#include <bcm2835.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #define PIN_SCK_1 RPI_V2_GPIO_P1_16 //sck пинами будем управлять напряжением каждого модуля
 #define PIN_SCK_2 RPI_V2_GPIO_P1_18
@@ -8,21 +10,25 @@
 unsigned long x;
 float x1=8433477.000000,x2=8364942.000000;
 float y1=0.000000, y2=8.000000;
-float weight[2];
-float a[2];
-float b[2];
-int shelf_num[3]={PIN_SCK_1,PIN_SCK_2,PIN_SCK_3}; // номер ячейки массива соответсвует пину идущего к полке
+float weight[3];
+float a[3];
+float b[3];
+int shelf_num[3]={PIN_SCK_1,PIN_SCK_2, PIN_SCK_3}; // номер ячейки массива соответсвует пину идущего к полке
 
 unsigned long HX711_Read(int PIN_SCK){	
+
 	unsigned long count=-1;
 	unsigned char i;
+	int flag=0;
 
 	bcm2835_gpio_write(PIN_SCK, LOW);
 	bcm2835_delayMicroseconds(1);
 	bcm2835_gpio_write(PIN_SCK, HIGH);
 	bcm2835_delayMicroseconds(1);
 	
-	while (bcm2835_gpio_lev(PIN_DAT))
+	while (bcm2835_gpio_lev(PIN_DAT)){
+		flag++;
+				//printf("lag=%d!\n", flag);
 		for(i=0; i<24; i++){
 			bcm2835_gpio_write(PIN_SCK, HIGH);
 			bcm2835_delayMicroseconds(1);
@@ -32,19 +38,23 @@ unsigned long HX711_Read(int PIN_SCK){
 			
 			if(bcm2835_gpio_lev(PIN_DAT)) count++;			
 		}
+		if (flag>99999) break; 
+	}
 	
-
-	bcm2835_gpio_write(PIN_SCK, HIGH);
-	count^=0x800000;
-	bcm2835_delayMicroseconds(1);
-	bcm2835_gpio_write(PIN_SCK, LOW);
-	bcm2835_delayMicroseconds(1);
-	//выключение HX711
-	bcm2835_gpio_write(PIN_SCK, HIGH);
-	bcm2835_delayMicroseconds(100); 
-
-	
-	//printf("count=%d",(int)count);
+	if ((flag<99999) && (flag>0)) { 
+		bcm2835_gpio_write(PIN_SCK, HIGH);
+		count^=0x800000;
+		bcm2835_delayMicroseconds(1);
+		bcm2835_gpio_write(PIN_SCK, LOW);
+		bcm2835_delayMicroseconds(1);
+		//выключение HX711
+		//	bcm2835_gpio_write(PIN_SCK, HIGH);
+		//	bcm2835_delayMicroseconds(100); 
+		
+		
+		printf("%d----- count=%d       flag=%d ", PIN_SCK, (int)count, flag);
+	}
+	else count=0; // shelf empty 
 	return(count);
 }
 
@@ -63,6 +73,7 @@ int HX711_Init(){
 	bcm2835_gpio_fsel(PIN_DAT, BCM2835_GPIO_FSEL_INPT);
 	bcm2835_gpio_set_pud(PIN_DAT, BCM2835_GPIO_PUD_UP); 
 	
+
 	return 0;
 }	
 
@@ -94,8 +105,9 @@ void Callibration(int shelf_number){
 
 
 int main(){
+
 	int i;
-	
+
 	if (HX711_Init() !=0){ 
 		printf("Init error\n");
 	 	return 0;
@@ -109,9 +121,12 @@ int main(){
 
   		//вычисляем вес на каждую полку по индивидуальным значениям a и b
   		for (i=0; i<3; i++){
-  			x=HX711_Read(shelf_num[i]); 
-  			weight[i]=a[i]*(float)x/1000+b[i]*1000;
-  			printf("Shelf_%d = %f \n",i, weight[i]);
+  			if ((x=HX711_Read(shelf_num[i]))!=0){
+	  			weight[i]=a[i]*(float)x/1000+b[i]*1000;
+	  			printf("Shelf_%d = %f \n",i, weight[i]);
+				sleep(1);
+			}
+			else {weight[i]=-1; printf("SHELF OFFLINE %d \n", i);}
   		}
 	
 	bcm2835_close();
